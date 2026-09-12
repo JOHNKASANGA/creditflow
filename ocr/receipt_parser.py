@@ -1,3 +1,4 @@
+# ocr/receipt_parser.py
 import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -8,11 +9,16 @@ from PIL import Image, ImageOps
 
 reader = easyocr.Reader(['en'], gpu=False)
 
-def parse_receipt(image_path):
+def load_and_correct(image_path):
+    """Shared orientation fix — used by both OCR and the UI preview so they always match."""
     img = Image.open(image_path)
     img = ImageOps.exif_transpose(img)
-    img = img.convert("RGB")
-    img_array = np.array(img)
+    return img.convert("RGB")
+
+def parse_receipt(image_path):
+    img = load_and_correct(image_path)
+    ocr_img = ImageOps.autocontrast(img.convert("L")).convert("RGB")
+    img_array = np.array(ocr_img)
 
     results = reader.readtext(img_array, detail=0)
     text = " ".join(results)
