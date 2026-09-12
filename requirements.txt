@@ -5,3 +5,4 @@ xgboost
 streamlit
 shap
 easyocr
+matplotlib 
