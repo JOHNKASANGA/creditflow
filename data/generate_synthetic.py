@@ -1,4 +1,5 @@
-
+import sys, os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import numpy as np
 import pandas as pd
 from schema import FEATURES, FEATURE_RANGES, TARGET
@@ -37,3 +38,5 @@ if __name__ == "__main__":
     df = generate_dataset()
     df.to_csv("data/synthetic_dataset.csv", index=False)
     print(df.describe())
+    df = pd.read_csv("data/synthetic_dataset.csv")
+    print(df.corr()["credit_score"])
