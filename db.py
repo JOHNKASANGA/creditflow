@@ -77,6 +77,7 @@ def init_db():
             pass
     conn.commit()
     conn.close()
+    seed_officer()
     
 # ---- Passwords ----
 def hash_password(password, salt=None):
@@ -279,3 +280,23 @@ def update_password(username, current_password, new_password):
     conn.commit()
     conn.close()
     return True, "Password updated."
+def set_phone_verified(username, verified=True):
+    conn = get_connection()
+    conn.execute("UPDATE profiles SET phone_verified=? WHERE username=?",
+                 (1 if verified else 0, username))
+    conn.commit()
+    conn.close()
+
+def seed_officer():
+    """
+    Ensures exactly one officer account exists. Credentials come from the
+    environment if set, otherwise fall back to the demo default.
+    """
+    username = os.environ.get("OFFICER_USERNAME", "Admin")
+    password = os.environ.get("OFFICER_PASSWORD", "Admin")
+    conn = get_connection()
+    exists = conn.execute("SELECT 1 FROM users WHERE username=?", (username,)).fetchone()
+    conn.close()
+    if not exists:
+        create_user(username, password, "officer")
+

@@ -28,7 +28,8 @@ from db import (
     get_submission, save_score, get_all_scored_submissions, get_my_submissions,
     request_loan, get_loan_requests, approve_loan, reject_loan,
     create_session, get_session, delete_session,
-    get_profile, save_profile, get_officer_visible_profile, update_password
+    get_profile, save_profile, get_officer_visible_profile, update_password,
+    set_phone_verified
 )
 from statistics import median
 import random
@@ -176,7 +177,6 @@ if not st.session_state.authenticated:
                         st.rerun()
                     else:
                         st.error("Incorrect username or password.")
-
         with tab_register:
             if "reg_stage" not in st.session_state:
                 st.session_state.reg_stage = "details"
@@ -185,12 +185,8 @@ if not st.session_state.authenticated:
                 with st.container(border=True):
                     st.markdown(
                         '<div class="cf-auth-head"><h3>Create your account</h3>'
-                        '<p>A few details to get you started</p></div>',
+                        '<p>For business owners applying for credit</p></div>',
                         unsafe_allow_html=True)
-
-                    role_choice = st.radio(
-                        "I am registering as", ["MSME business owner", "Access Bank officer"],
-                        horizontal=True)
 
                     c1, c2 = st.columns(2)
                     with c1:
@@ -202,27 +198,22 @@ if not st.session_state.authenticated:
                         email = st.text_input("Email")
                         confirm_password = st.text_input("Confirm password", type="password")
 
-                    venture_name = ""
-                    if role_choice == "MSME business owner":
-                        venture_name = st.text_input("Business name")
+                    venture_name = st.text_input("Business name")
 
                     st.caption("We'll send a 6-digit code to your phone to confirm it's yours.")
 
                     if st.button("Continue", use_container_width=True, type="primary"):
                         phone = normalise_ng_phone(phone_raw)
-                        if not all([full_name, new_username, new_password, phone_raw]):
-                            st.error("Full name, username, password and phone number are required.")
+                        if not all([full_name, new_username, new_password, phone_raw, venture_name]):
+                            st.error("Full name, username, password, phone number and business name are required.")
                         elif new_password != confirm_password:
                             st.error("Passwords do not match.")
                         elif len(new_password) < 6:
                             st.error("Use a password of at least 6 characters.")
                         elif phone is None:
                             st.error("Enter a valid Nigerian phone number, e.g. 08012345678.")
-                        elif role_choice == "MSME business owner" and not venture_name:
-                            st.error("Business name is required.")
                         else:
                             st.session_state.reg_data = {
-                                "role": "msme" if role_choice == "MSME business owner" else "officer",
                                 "full_name": full_name, "username": new_username,
                                 "password": new_password, "phone": phone,
                                 "email": email, "venture_name": venture_name,
@@ -248,19 +239,18 @@ if not st.session_state.authenticated:
                     if v1.button("Verify and create account", use_container_width=True, type="primary"):
                         if code.strip() != st.session_state.reg_otp:
                             st.error("That code is incorrect.")
-                        elif not create_user(data["username"], data["password"], data["role"]):
+                        elif not create_user(data["username"], data["password"], "msme"):
                             st.error("That username is already taken.")
                             st.session_state.reg_stage = "details"
                         else:
-                            if data["role"] == "msme":
-                                save_profile(data["username"], {
-                                    "full_name": data["full_name"],
-                                    "venture_name": data["venture_name"],
-                                    "nin": "", "account_number": "", "gender": "",
-                                    "date_of_birth": "", "email": data["email"],
-                                    "phone_number": data["phone"], "address": "",
-                                })
-                                set_phone_verified(data["username"])
+                            save_profile(data["username"], {
+                                "full_name": data["full_name"],
+                                "venture_name": data["venture_name"],
+                                "nin": "", "account_number": "", "gender": "",
+                                "date_of_birth": "", "email": data["email"],
+                                "phone_number": data["phone"], "address": "",
+                            })
+                            set_phone_verified(data["username"])
                             st.session_state.auth_flash = "Account created — please sign in."
                             st.session_state.reg_stage = "details"
                             st.session_state.pop("reg_data", None)
@@ -268,8 +258,7 @@ if not st.session_state.authenticated:
                             st.rerun()
                     if v2.button("Back", use_container_width=True):
                         st.session_state.reg_stage = "details"
-                        st.rerun()
-
+                         st.rerun()
     st.stop()
 
 # ---------------- Login / Register ----------------
