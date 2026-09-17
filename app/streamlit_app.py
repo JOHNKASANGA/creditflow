@@ -31,8 +31,25 @@ from db import (
     get_profile, save_profile, get_officer_visible_profile, update_password
 )
 from statistics import median
+import random
+import re
 
 AMOUNT_THRESHOLD = 1000.0   # below this, a number is a quantity, not a Naira amount
+
+def normalise_ng_phone(raw):
+    """Accepts 08012345678, 8012345678, +2348012345678. Returns +234... or None."""
+    digits = re.sub(r"\D", "", raw or "")
+    if digits.startswith("234") and len(digits) == 13:
+        return "+" + digits
+    if digits.startswith("0") and len(digits) == 11:
+        return "+234" + digits[1:]
+    if len(digits) == 10:
+        return "+234" + digits
+    return None
+
+
+def new_otp():
+    return f"{random.randint(0, 999999):06d}"
 
 def verify_face(known_image_path, live_image_bytes):
         return False, "Face verification is unavailable in this deployment."
@@ -105,6 +122,18 @@ section[data-testid="stSidebar"] .stButton > button {
   width:100%; text-align:left; justify-content:flex-start; font-weight:500;
   border-radius:10px;
 }
+.cf-rank-row {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:10px 12px; border-radius:10px;
+  border:1px solid transparent;
+  transition: background .15s ease, border-color .15s ease, transform .15s ease;
+}
+.cf-rank-row:hover {
+  background:#FFF3EE; border-color:#F15A24; transform:translateX(2px);
+}
+.cf-auth-head { text-align:center; margin-bottom:6px; }
+.cf-auth-head h3 { margin:0; color:#0B1F3A; font-size:20px; font-weight:700; }
+.cf-auth-head p { margin:4px 0 0; color:#8A94A6; font-size:13px; }
 </style>
 <div style="background:#0B1F3A; padding:22px 28px; border-radius:14px; margin-bottom:24px;">
   <div style="color:#F15A24; font-size:28px; font-weight:700;">CreditFlow AI</div>
@@ -121,13 +150,127 @@ if "authenticated" not in st.session_state:
 
 # ---- Restore session from URL token (survives browser refresh) ----
 if not st.session_state.authenticated:
-    token = st.query_params.get("session")
-    if token:
-        session_row = get_session(token)
-        if session_row:
-            st.session_state.authenticated = True
-            st.session_state.username = session_row["username"]
-            st.session_state.role = session_row["role"]
+    _, mid, _ = st.columns([1, 2, 1])
+    with mid:
+        tab_login, tab_register = st.tabs(["Sign in", "Create account"])
+
+        with tab_login:
+            with st.container(border=True):
+                st.markdown(
+                    '<div class="cf-auth-head"><h3>Welcome back</h3>'
+                    '<p>Sign in to your CreditFlow account</p></div>',
+                    unsafe_allow_html=True)
+                if st.session_state.get("auth_flash"):
+                    st.success(st.session_state.pop("auth_flash"))
+                username = st.text_input("Username", key="login_user")
+                password = st.text_input("Password", type="password", key="login_pass")
+                if st.button("Sign in", use_container_width=True, type="primary"):
+                    role = verify_user(username, password)
+                    if role:
+                        token = create_session(username, role)
+                        st.query_params["session"] = token
+                        st.session_state.authenticated = True
+                        st.session_state.role = role
+                        st.session_state.username = username
+                        st.session_state.page = "home"
+                        st.rerun()
+                    else:
+                        st.error("Incorrect username or password.")
+
+        with tab_register:
+            if "reg_stage" not in st.session_state:
+                st.session_state.reg_stage = "details"
+
+            if st.session_state.reg_stage == "details":
+                with st.container(border=True):
+                    st.markdown(
+                        '<div class="cf-auth-head"><h3>Create your account</h3>'
+                        '<p>A few details to get you started</p></div>',
+                        unsafe_allow_html=True)
+
+                    role_choice = st.radio(
+                        "I am registering as", ["MSME business owner", "Access Bank officer"],
+                        horizontal=True)
+
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        full_name = st.text_input("Full name")
+                        new_username = st.text_input("Username")
+                        new_password = st.text_input("Password", type="password")
+                    with c2:
+                        phone_raw = st.text_input("Phone number", placeholder="08012345678")
+                        email = st.text_input("Email")
+                        confirm_password = st.text_input("Confirm password", type="password")
+
+                    venture_name = ""
+                    if role_choice == "MSME business owner":
+                        venture_name = st.text_input("Business name")
+
+                    st.caption("We'll send a 6-digit code to your phone to confirm it's yours.")
+
+                    if st.button("Continue", use_container_width=True, type="primary"):
+                        phone = normalise_ng_phone(phone_raw)
+                        if not all([full_name, new_username, new_password, phone_raw]):
+                            st.error("Full name, username, password and phone number are required.")
+                        elif new_password != confirm_password:
+                            st.error("Passwords do not match.")
+                        elif len(new_password) < 6:
+                            st.error("Use a password of at least 6 characters.")
+                        elif phone is None:
+                            st.error("Enter a valid Nigerian phone number, e.g. 08012345678.")
+                        elif role_choice == "MSME business owner" and not venture_name:
+                            st.error("Business name is required.")
+                        else:
+                            st.session_state.reg_data = {
+                                "role": "msme" if role_choice == "MSME business owner" else "officer",
+                                "full_name": full_name, "username": new_username,
+                                "password": new_password, "phone": phone,
+                                "email": email, "venture_name": venture_name,
+                            }
+                            st.session_state.reg_otp = new_otp()
+                            st.session_state.reg_stage = "verify"
+                            st.rerun()
+
+            else:
+                data = st.session_state.reg_data
+                with st.container(border=True):
+                    st.markdown(
+                        '<div class="cf-auth-head"><h3>Verify your phone</h3>'
+                        f'<p>Enter the 6-digit code sent to {data["phone"]}</p></div>',
+                        unsafe_allow_html=True)
+
+                    st.info(f"Demo mode — your code is **{st.session_state.reg_otp}**. "
+                            "A production build delivers this by SMS.")
+
+                    code = st.text_input("6-digit code", max_chars=6)
+
+                    v1, v2 = st.columns(2)
+                    if v1.button("Verify and create account", use_container_width=True, type="primary"):
+                        if code.strip() != st.session_state.reg_otp:
+                            st.error("That code is incorrect.")
+                        elif not create_user(data["username"], data["password"], data["role"]):
+                            st.error("That username is already taken.")
+                            st.session_state.reg_stage = "details"
+                        else:
+                            if data["role"] == "msme":
+                                save_profile(data["username"], {
+                                    "full_name": data["full_name"],
+                                    "venture_name": data["venture_name"],
+                                    "nin": "", "account_number": "", "gender": "",
+                                    "date_of_birth": "", "email": data["email"],
+                                    "phone_number": data["phone"], "address": "",
+                                })
+                                set_phone_verified(data["username"])
+                            st.session_state.auth_flash = "Account created — please sign in."
+                            st.session_state.reg_stage = "details"
+                            st.session_state.pop("reg_data", None)
+                            st.session_state.pop("reg_otp", None)
+                            st.rerun()
+                    if v2.button("Back", use_container_width=True):
+                        st.session_state.reg_stage = "details"
+                        st.rerun()
+
+    st.stop()
 
 # ---------------- Login / Register ----------------
 if not st.session_state.authenticated:
@@ -321,21 +464,33 @@ def frag_leaderboard():
             return
         for rank, row in enumerate(scored, start=1):
             c = BADGE_COLORS.get(row["risk"], "#8A94A6")
-            st.markdown(f"""
-            <div style="display:flex; align-items:center; justify-content:space-between;
-                padding:10px 2px; border-bottom:1px solid #EEF1F4;">
-                <div style="display:flex; align-items:center; gap:10px;">
-                    <div style="width:20px; color:#8A94A6; font-weight:600; font-size:13px;">{rank}</div>
+            r_row, r_btn = st.columns([5, 1])
+            with r_row:
+                st.markdown(f"""
+                <div class="cf-rank-row">
+                  <div style="display:flex; align-items:center; gap:12px;">
+                    <div style="width:22px; color:#8A94A6; font-weight:700; font-size:13px;">{rank}</div>
                     <div style="font-weight:600; color:#0B1F3A; font-size:14px;">{row['msme_username']}</div>
-                </div>
-                <div style="display:flex; align-items:center; gap:8px;">
+                  </div>
+                  <div style="display:flex; align-items:center; gap:8px;">
                     <span style="font-weight:700; color:#0B1F3A;">{row['score']}</span>
-                    <span style="background:{c}20; color:{c}; padding:2px 9px; border-radius:999px;
+                    <span style="background:{c}20; color:{c}; padding:2px 10px; border-radius:999px;
                         font-size:11px; font-weight:600; border:1px solid {c};">{row['risk']}</span>
+                  </div>
                 </div>
-            </div>
-            """, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
+            with r_btn:
+                if st.button("View", key=f"lb_{row['id']}", use_container_width=True):
+                    current = st.session_state.get("lb_open")
+                    st.session_state.lb_open = None if current == row["id"] else row["id"]
+                    st.rerun()
 
+            if st.session_state.get("lb_open") == row["id"]:
+                applicant_card(row["msme_username"])
+                d1, d2, d3 = st.columns(3)
+                d1.metric("Score", row["score"])
+                d2.metric("Max loan", f"NGN {row['max_loan']:,}")
+                d3.markdown(status_pill(row["status"]), unsafe_allow_html=True)
 
 @st.fragment(run_every=5)
 def frag_loan_requests():

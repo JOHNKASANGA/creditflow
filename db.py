@@ -65,6 +65,11 @@ def init_db():
             updated_at TEXT
         )
     """)
+    for col_def in ["phone_verified INTEGER DEFAULT 0"]:
+        try:
+            conn.execute(f"ALTER TABLE profiles ADD COLUMN {col_def}")
+        except sqlite3.OperationalError:
+            pass
     for col_def in ["requested_amount REAL", "requested_at TEXT", "approved_by TEXT", "approved_at TEXT"]:
         try:
             conn.execute(f"ALTER TABLE submissions ADD COLUMN {col_def}")
