@@ -466,7 +466,7 @@ def page_msme_loan():
         st.info("A loan request has already been made against this assessment.")
         return
 
-       st.markdown("### Request a loan")
+        st.markdown("### Request a loan")
     profile = get_profile(st.session_state.username)
     with st.container(border=True):
         amount = st.number_input(
@@ -500,7 +500,7 @@ def page_msme_loan():
                     st.rerun()
                 else:
                     st.error(message)
-                    
+
 def page_profile():
     profile = get_profile(st.session_state.username) if st.session_state.role == "msme" else None
     display_name = (profile or {}).get("full_name") or st.session_state.username
