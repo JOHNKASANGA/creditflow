@@ -258,7 +258,7 @@ if not st.session_state.authenticated:
                             st.rerun()
                     if v2.button("Back", use_container_width=True):
                         st.session_state.reg_stage = "details"
-                         st.rerun()
+                        st.rerun()
     st.stop()
 
 # ---------------- Login / Register ----------------
