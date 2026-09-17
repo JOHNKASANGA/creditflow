@@ -1,0 +1,29 @@
+# Virtual environments — these are what broke the push
+venv/
+venv312/
+env/
+.venv/
+
+# Secrets — never commit these
+.env
+.streamlit/secrets.toml
+
+# Local database (Cloud rebuilds it from init_db)
+creditflow.db
+*.db-journal
+
+# User-uploaded and captured images
+profile_photos/
+receipts/
+temp_upload.jpg
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+
+# Editor / OS noise
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,15 @@
+streamlit
+matplotlib
+xgboost
+shap
+scikit-learn
+pandas
+numpy
+pillow
+python-dotenv
+cryptography
+azure-ai-vision-imageanalysis
+azure-core
+deepface
+tensorflow
+tf-keras
