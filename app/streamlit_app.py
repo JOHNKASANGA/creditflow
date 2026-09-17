@@ -32,15 +32,17 @@ from db import (
 )
 
 # ---- Face verification is optional: present locally, absent on Streamlit Cloud ----
+# ---- Face verification is optional; can also be force-disabled for a demo ----
+_DISABLE_FACE = os.environ.get("DISABLE_FACE_VERIFICATION", "").lower() in ("1", "true", "yes")
+
 try:
     from face_verify import verify_face
-    FACE_VERIFICATION_AVAILABLE = True
+    FACE_VERIFICATION_AVAILABLE = not _DISABLE_FACE
 except Exception:
     FACE_VERIFICATION_AVAILABLE = False
 
     def verify_face(known_image_path, live_image_bytes):
         return False, "Face verification is unavailable in this deployment."
-
 
 st.set_page_config(page_title="CreditFlow AI", layout="wide")
 init_db()
