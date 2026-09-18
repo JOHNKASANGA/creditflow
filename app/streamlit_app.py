@@ -163,6 +163,12 @@ def render_loan_summary(risk, max_loan, top_pad=18):
     </div>
     """, unsafe_allow_html=True)
 
+def stat_block(label, value, size=24):
+    return (f'<div style="color:#8A94A6;font-size:12px;text-transform:uppercase;'
+            f'letter-spacing:.05em;">{label}</div>'
+            f'<div style="font-size:{size}px;font-weight:700;color:{NAVY};'
+            f'white-space:nowrap;">{value}</div>')
+
 
 def latest_scored_row(username):
     for row in get_my_submissions(username):
@@ -432,8 +438,9 @@ def frag_my_applications():
         return
     for row in my_subs:
         with st.container(border=True):
-            cols = st.columns([2, 1, 1, 2])
-            cols[0].markdown(f"**Submission #{row['id']}**  \n{row['submitted_at'][:16]}")
+            cols[1].markdown(stat_block("Score", row["score"]), unsafe_allow_html=True)
+            cols[2].markdown(stat_block("Max loan", f"NGN {row['max_loan']:,}", 19),
+                                 unsafe_allow_html=True)
             if row["score"] is not None:
                 cols[1].metric("Score", row["score"])
                 cols[2].metric("Max loan", f"NGN {row['max_loan']:,}")
@@ -482,8 +489,9 @@ def frag_leaderboard():
             if st.session_state.get("lb_open") == row["id"]:
                 applicant_card(row["msme_username"])
                 d1, d2, d3 = st.columns(3)
-                d1.metric("Score", row["score"])
-                d2.metric("Max loan", f"NGN {row['max_loan']:,}")
+                d1.markdown(stat_block("Score", row["score"]), unsafe_allow_html=True)
+                d2.markdown(stat_block("Max loan", f"NGN {row['max_loan']:,}", 19),
+                            unsafe_allow_html=True)
                 d3.markdown(status_pill(row["status"]), unsafe_allow_html=True)
 
 
@@ -496,9 +504,10 @@ def frag_loan_requests():
     for row in requests:
         with st.container(border=True):
             applicant_card(row["msme_username"])
-            c1, c2, c3 = st.columns([1, 1, 2])
-            c1.metric("Score", row["score"])
-            c2.metric("Requested", f"NGN {row['requested_amount']:,.0f}")
+            c1, c2, c3 = st.columns([1, 1.4, 2])
+            c1.markdown(stat_block("Score", row["score"]), unsafe_allow_html=True)
+            c2.markdown(stat_block("Requested", f"NGN {row['requested_amount']:,.0f}", 19),
+                        unsafe_allow_html=True)
             with c3:
                 a_col, r_col = st.columns(2)
                 if a_col.button("Accept", key=f"accept_{row['id']}",
