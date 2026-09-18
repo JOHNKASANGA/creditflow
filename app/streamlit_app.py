@@ -31,8 +31,8 @@ from db import (
     set_phone_verified
 )
 
-# ---- Face verification is optional: present locally, absent on Streamlit Cloud ----
-# ---- Face verification is optional; can also be force-disabled for a demo ----
+# ---- Face verification is optional: present locally, absent on Streamlit Cloud.
+# ---- Can also be force-disabled for a demo via DISABLE_FACE_VERIFICATION.
 _DISABLE_FACE = os.environ.get("DISABLE_FACE_VERIFICATION", "").lower() in ("1", "true", "yes")
 
 try:
@@ -43,6 +43,7 @@ except Exception:
 
     def verify_face(known_image_path, live_image_bytes):
         return False, "Face verification is unavailable in this deployment."
+
 
 st.set_page_config(page_title="CreditFlow AI", layout="wide")
 init_db()
@@ -162,6 +163,7 @@ def render_loan_summary(risk, max_loan, top_pad=18):
         line-height:1.2;white-space:nowrap;">NGN {max_loan:,}</div>
     </div>
     """, unsafe_allow_html=True)
+
 
 def stat_block(label, value, size=24):
     return (f'<div style="color:#8A94A6;font-size:12px;text-transform:uppercase;'
@@ -438,12 +440,13 @@ def frag_my_applications():
         return
     for row in my_subs:
         with st.container(border=True):
-            cols[1].markdown(stat_block("Score", row["score"]), unsafe_allow_html=True)
-            cols[2].markdown(stat_block("Max loan", f"NGN {row['max_loan']:,}", 19),
-                                 unsafe_allow_html=True)
+            cols = st.columns([2, 1, 1.4, 2])
+            cols[0].markdown(f"**Submission #{row['id']}**  \n{row['submitted_at'][:16]}")
             if row["score"] is not None:
-                cols[1].metric("Score", row["score"])
-                cols[2].metric("Max loan", f"NGN {row['max_loan']:,}")
+                cols[1].markdown(stat_block("Score", row["score"]),
+                                 unsafe_allow_html=True)
+                cols[2].markdown(stat_block("Max loan", f"NGN {row['max_loan']:,}", 19),
+                                 unsafe_allow_html=True)
             else:
                 cols[1].caption("—")
                 cols[2].caption("—")
@@ -460,35 +463,54 @@ def frag_leaderboard():
         if not scored:
             st.caption("No scored applicants yet.")
             return
-        for rank, row in enumerate(scored, start=1):
+        # Each rank row IS the button — a styled st.button, since raw HTML
+        # cannot trigger a Streamlit rerun. One style block for all rows.
+        _open = st.session_state.get("lb_open")
+        _css = []
+        for row in scored:
             c = BADGE_COLORS.get(row["risk"], "#8A94A6")
-            r_row, r_btn = st.columns([5, 1])
-            with r_row:
-                st.markdown(f"""
-                <div class="cf-rank-row">
-                  <div style="display:flex; align-items:center; gap:12px;">
-                    <div style="width:22px; color:#8A94A6; font-weight:700;
-                      font-size:13px;">{rank}</div>
-                    <div style="font-weight:600; color:#0B1F3A;
-                      font-size:14px;">{row['msme_username']}</div>
-                  </div>
-                  <div style="display:flex; align-items:center; gap:8px;">
-                    <span style="font-weight:700; color:#0B1F3A;">{row['score']}</span>
-                    <span style="background:{c}20; color:{c}; padding:2px 10px;
-                        border-radius:999px; font-size:11px; font-weight:600;
-                        border:1px solid {c};">{row['risk']}</span>
-                  </div>
-                </div>
-                """, unsafe_allow_html=True)
-            with r_btn:
-                if st.button("View", key=f"lb_{row['id']}", use_container_width=True):
-                    current = st.session_state.get("lb_open")
-                    st.session_state.lb_open = None if current == row["id"] else row["id"]
-                    st.rerun()
+            k = f"st-key-lb_{row['id']}"
+            border = ORANGE if _open == row["id"] else "transparent"
+            _css.append(f"""
+            .{k} button {{
+              position:relative !important; width:100% !important;
+              min-height:46px !important; border-radius:10px !important;
+              border:1px solid {border} !important; background:#FFFFFF !important;
+              padding:8px 96px 8px 14px !important;
+              text-align:left !important; justify-content:flex-start !important;
+              transition:background-color .15s ease, border-color .15s ease,
+                         transform .15s ease;
+            }}
+            .{k} button:hover {{
+              background:#FFF3EE !important; border-color:{ORANGE} !important;
+              transform:translateX(2px);
+            }}
+            .{k} button::after {{
+              content:"{row['risk']}";
+              position:absolute; right:12px; top:50%; transform:translateY(-50%);
+              background:{c}20; color:{c}; border:1px solid {c};
+              padding:2px 10px; border-radius:999px;
+              font-size:11px; font-weight:600; line-height:1.4;
+            }}
+            .{k} button p {{
+              font-weight:600 !important; color:{NAVY} !important;
+              font-size:14px !important; margin:0 !important;
+              white-space:nowrap !important; overflow:hidden !important;
+              text-overflow:ellipsis !important;
+            }}
+            """)
+        st.markdown("<style>" + "".join(_css) + "</style>", unsafe_allow_html=True)
+
+        for rank, row in enumerate(scored, start=1):
+            if st.button(f"{rank}.  {row['msme_username']}  ·  {row['score']}",
+                         key=f"lb_{row['id']}", use_container_width=True):
+                current = st.session_state.get("lb_open")
+                st.session_state.lb_open = None if current == row["id"] else row["id"]
+                st.rerun()
 
             if st.session_state.get("lb_open") == row["id"]:
                 applicant_card(row["msme_username"])
-                d1, d2, d3 = st.columns(3)
+                d1, d2, d3 = st.columns([1, 1.4, 2])
                 d1.markdown(stat_block("Score", row["score"]), unsafe_allow_html=True)
                 d2.markdown(stat_block("Max loan", f"NGN {row['max_loan']:,}", 19),
                             unsafe_allow_html=True)
@@ -958,24 +980,54 @@ _avatar_uri = (img_data_uri((_profile or {}).get("biometric_path"))
                or img_data_uri((_profile or {}).get("photo_path")))
 
 if _avatar_uri:
-    _avatar_html = f'<div class="cf-avatar" style="background-image:url({_avatar_uri});"></div>'
+    _avatar_css = (f'content:"";background-image:url({_avatar_uri});'
+                   f'background-size:cover;background-position:center;')
 else:
-    _avatar_html = (f'<div class="cf-avatar">'
-                    f'{initials(_display_name, st.session_state.username)}</div>')
+    _avatar_css = (f'content:"{initials(_display_name, st.session_state.username)}";'
+                   f'background:{NAVY};color:#FFFFFF;display:flex;'
+                   f'align-items:center;justify-content:center;'
+                   f'font-weight:700;font-size:14px;')
+
+_bubble_border = ORANGE if st.session_state.page == "profile" else "#E4E9F0"
 
 with st.sidebar:
+    # The profile bubble IS the button — a styled st.button, since raw HTML
+    # cannot trigger a Streamlit rerun.
     st.markdown(f"""
-    <div class="cf-bubble">
-      {_avatar_html}
-      <div>
-        <div class="cf-bubble-name">{_display_name}</div>
-        <div class="cf-bubble-role">{st.session_state.role.upper()}</div>
-      </div>
-    </div>
+    <style>
+    .st-key-nav_profile button {{
+      position:relative !important;
+      width:100% !important;
+      min-height:56px !important;
+      border-radius:999px !important;
+      border:1px solid {_bubble_border} !important;
+      background:#FFFFFF !important;
+      padding:8px 14px 8px 56px !important;
+      text-align:left !important;
+      justify-content:flex-start !important;
+      transition:border-color .15s ease, background-color .15s ease,
+                 box-shadow .15s ease, transform .15s ease;
+    }}
+    .st-key-nav_profile button:hover {{
+      border-color:{ORANGE} !important;
+      background:#FFF3EE !important;
+      box-shadow:0 4px 12px rgba(241,90,36,0.18) !important;
+      transform:translateY(-1px);
+    }}
+    .st-key-nav_profile button::before {{
+      {_avatar_css}
+      position:absolute; left:9px; top:50%; transform:translateY(-50%);
+      width:38px; height:38px; border-radius:50%;
+    }}
+    .st-key-nav_profile button p {{
+      font-weight:600 !important; color:{NAVY} !important;
+      font-size:14px !important; white-space:normal !important;
+      line-height:1.25 !important; margin:0 !important;
+    }}
+    </style>
     """, unsafe_allow_html=True)
 
-    if st.button("View profile", key="nav_profile", use_container_width=True,
-                 type="primary" if st.session_state.page == "profile" else "secondary"):
+    if st.button(_display_name, key="nav_profile", use_container_width=True):
         st.session_state.page = "profile"
         st.rerun()
 
